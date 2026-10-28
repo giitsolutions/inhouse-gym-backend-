@@ -83,6 +83,16 @@ const rentalSchema = new mongoose.Schema(
   { strict: false, timestamps: true }
 );
 const Rental = mongoose.model("Rental", rentalSchema);
+// ---------- Cart (per-user, cross-device) ----------
+const cartSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    items: { type: Array, default: [] },
+  },
+  { timestamps: true }
+);
+const Cart = mongoose.model("Cart", cartSchema);
+
 
 // ---------- Helpers ----------
 function publicUser(doc) {
@@ -404,5 +414,29 @@ app.delete("/api/rentals/:id", needAdmin, async (req, res) => {
     res.status(500).json({ error: "db error" });
   }
 });
+// Cart: logged-in user ka cart har device par dikhe.
+app.get("/api/cart", async (req, res) => {
+  try {
+    const email = (req.query.email || "").trim().toLowerCase();
+    if (!email) return res.json([]);
+    const doc = await Cart.findOne({ email });
+    res.json(doc ? doc.items : []);
+  } catch (e) {
+    res.status(500).json({ error: "db error" });
+  }
+});
+
+app.post("/api/cart", async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!email) return res.status(400).json({ error: "email required" });
+    await Cart.findOneAndUpdate({ email }, { items }, { upsert: true, new: true });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "db error" });
+  }
+});
+
 
 app.listen(PORT, () => console.log("InHouseGym backend running on port " + PORT));
